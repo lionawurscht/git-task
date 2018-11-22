@@ -44,7 +44,7 @@ prepare () {
     fi
 
 	#echo "Checking out task-branch..."
-	git checkout  -q ${_TASKBRANCH}
+	git checkout  -q ${_TASKBRANCH} &>/dev/null
 	if [[ $? -ne 0 ]]; then
 		#echo "No task branch. Creating new orphan branch..."
 		git checkout -q --orphan "${_TASKBRANCH}" HEAD || rollback 1
@@ -58,13 +58,24 @@ prepare () {
 task_commit () {
 	#echo "Starting task transaction..."
 	#echo "Recording task..."
-    TASKDATA=.task task $* || rollback 1
+    if [[ ! -d .taskrc ]]; then
+        no_taskrc=true
+    fi
+
+    TASKDATA=.task TASKRC=.taskrc task $* || rollback 1
 
     # add and commit the changes
 	#echo "Adding task to git..."
-    git add .task || rollback 1
+    git add .task .taskrc || rollback 1
+
+    msg="$*"
+
+    if [ -z "$msg" ] && [ "$no_taskrc" = true ]; then
+        msg="Created .taskrc"
+    fi
+
 	#echo "Committing task..."
-	git commit -q -m "$*" || rollback 1
+	git commit -q -m "${msg}" &>/dev/null || rollback 1
 	#echo "Transaction done."
 }
 
