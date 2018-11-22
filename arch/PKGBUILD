@@ -1,24 +1,40 @@
-# Maintainer: slowpoke <mail+aur@slowpoke.io>
-pkgname=git-task
-pkgver=0.1
+# Maintainer: Lion Waaser <extra.lion.w@gmail.com>
+pkgname=git-task-git
+pkgver=0.1.r1.g91ac5b3
 pkgrel=1
-epoch=
-pkgdesc="an issue tracker for git"
+pkgdesc="mini-issue-tracker for git repositories, using Taskwarrior"
 arch=(any)
 url="https://github.com/proxypoke/git-task"
 license=('custom:Anti-License')
+groups=()
 depends=('git' 'task')
-makedepens=('unzip')
-source=("https://github.com/proxypoke/git-task/archive/${pkgver}.zip")
-md5sums=('2beb7cd6ac91885ed2c482251f93de4d')
+makedepends=('make' 'asciidoc')
+source=("git+https://github.com/lionawurscht/git-task")
+md5sums=('SKIP')
 
-package() {
-  cd "$srcdir/$pkgname-$pkgver"
-  mkdir -p "${pkgdir}/usr/bin"
-  mkdir -p "${pkgdir}/usr/share"/{doc,licenses}/git-task
-  install -Tm 0755 git-task.sh "${pkgdir}/usr/bin/git-task"
-  install -m 0444 README.asciidoc "${pkgdir}/usr/share/doc/git-task/"
-  install -m 0444 COPYING "${pkgdir}/usr/share/licenses/git-task/"
+pkgver() {
+  cd "git-task"
+  git describe --long | sed 's/\([^-]*-g\)/r\1/;s/-/./g'
 }
 
-# vim:set ts=2 sw=2 et:
+build() {
+	cd "git-task"
+	make man
+}
+
+package() {
+	cd "${srcdir}/git-task"
+
+    mkdir -p "${pkgdir}/usr/bin"
+    mkdir -p "${pkgdir}/usr/share/man/man1"
+    mkdir -p "${pkgdir}/usr/share/doc/${pkgname}"
+    mkdir -p "${pkgdir}/usr/share/licenses/${pkgname}"
+
+    install -Tm 0755 git-task.sh "${pkgdir}/usr/bin/git-task"
+    install -m 0444 README.asciidoc "${pkgdir}/usr/share/doc/${pkgname}/"
+    install -m 0444 COPYING "${pkgdir}/usr/share/licenses/${pkgname}/"
+    install -m 0444 "man/git-task.1.gz" "${pkgdir}/usr/share/man/man1/"
+
+    echo "To add git-task as a pseudo-git command run:"
+    echo 'git config --global alias.issue '!'"$(which git-task)"'
+}
