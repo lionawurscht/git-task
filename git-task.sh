@@ -9,6 +9,7 @@
 
 _TASKBRANCH="${TASKBRANCH:-tasks}"
 _DEBUG="${DEBUG:-false}"
+_TASKRC="${TASKRC:-.taskrc}"
 
 log () {
   echo $* >&1
@@ -69,16 +70,18 @@ prepare () {
 task_commit () {
   $_DEBUG && log "Starting task transaction..."
   $_DEBUG && log "Recording task..."
-  if [[ ! -d .taskrc ]]; then
-      no_taskrc=true
+  if [[ ! -d "${_TASKRC}" ]]; then
+    $_DEBUG && log "Remembering that task configuration file doesn't exist."
+    no_taskrc=true
   fi
-  TASKDATA=.task TASKRC=.taskrc task $* || rollback 1
+  TASKDATA=.task TASKRC="${_TASKRC}" task $* || rollback 1
   # add and commit the changes
   $_DEBUG && log "Adding task to git..."
-  git add .task .taskrc || rollback 1
+  git add .task "${_TASKRC}" || rollback 1
   msg="$*"
   if [ -z "$msg" ] && [ "$no_taskrc" = true ]; then
-      msg="Created .taskrc"
+    $_DEBUG && log "Custom commit message for creating task configuration file."
+    msg="Created task configuration file."
   fi
   $_DEBUG && log "Committing task..."
 	git commit -q -m "${msg}" &>/dev/null || rollback 1
@@ -104,9 +107,25 @@ rollback () {
 
 # TODO: Figure out a better way to save this than a global.
 _CURRENT=$(current_branch)
-prepare
-task_commit $*
-rollback
+
+case $1 in
+  editconfig)
+  $_DEBUG && log "Edit config file."
+  prepare
+  $EDITOR "${_TASKRC}"
+  $_DEBUG && log "Adding taskrc to git..."
+  git add "${_TASKRC}" || rollback 1
+  $_DEBUG && log "Committing task..."
+	git commit -q -m "Edited task configuration file" &>/dev/null || rollback 1
+  rollback
+  $_DEBUG && log "Finishing transaction."
+  ;;
+  *)
+  prepare
+  task_commit $*
+  rollback
+  ;;
+esac
 
 exit 0
 
