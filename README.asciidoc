@@ -29,6 +29,12 @@ To use this as a pseudo git-command, you can add an alias in your .gitconfig:
 
 	task = !path/to/git-task.sh
 
+Now also supports worktrees. Parses the output of 'git worktree list
+--porcelaine' to check whether the task branch has a worktree and, if so,
+simply 'cd's there instead of the whole stach behavior. You could for example
+create a directory directly in you git root and add it to '.gitignore'. Then
+add run 'git worktree add path/to/tasks/directory <task branch>'.
+
 SEE ALSO
 --------
 task(1), git(1)
