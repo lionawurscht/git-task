@@ -8,6 +8,7 @@
 # files have changes. Find a way to avoid this, if possible.
 
 _TASKBRANCH="${TASKBRANCH:-tasks}"
+_DEFAULT_TASK_ADD_ARGS="${DEFAULT_TASK_ADD_ARGS:-}"
 _DEBUG="${DEBUG:-false}"
 _TASKRC="${TASKRC:-.taskrc}"
 
@@ -74,7 +75,16 @@ task_commit () {
     $_DEBUG && log "Remembering that task configuration file doesn't exist."
     no_taskrc=true
   fi
-  TASKDATA=.task TASKRC="${_TASKRC}" task $* || rollback 1
+  case $1 in
+    add)
+    task_args=$DEFAULT_TASK_ADD_ARGS
+    ;;
+    *)
+    task_args=""
+    ;;
+  esac
+
+  TASKDATA=.task TASKRC="${_TASKRC}" task $* $task_args || rollback 1
   # add and commit the changes
   $_DEBUG && log "Adding task to git..."
   git add .task "${_TASKRC}" || rollback 1
