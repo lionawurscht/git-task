@@ -8,7 +8,7 @@
 # files have changes. Find a way to avoid this, if possible.
 
 _TASKBRANCH="${TASKBRANCH:-tasks}"
-_DEFAULT_TASK_ADD_ARGS="${DEFAULT_TASK_ADD_ARGS:-}"
+_DEFAULT_TASK_ADD_ARGS=(${DEFAULT_TASK_ADD_ARGS:-})
 _DEBUG="${DEBUG:-false}"
 _TASKRC="${TASKRC:-.taskrc}"
 
@@ -78,13 +78,14 @@ task_commit () {
   case $1 in
     add)
     task_args=$DEFAULT_TASK_ADD_ARGS
+    $_DEBUG && log "Adding args: ${task_args}"
     ;;
     *)
     task_args=""
     ;;
   esac
 
-  TASKDATA=.task TASKRC="${_TASKRC}" task $* $task_args || rollback 1
+  TASKDATA=.task TASKRC="${_TASKRC}" task $1 ${task_args[@]} ${@:2} || rollback 1
   # add and commit the changes
   $_DEBUG && log "Adding task to git..."
   git add .task "${_TASKRC}" || rollback 1
