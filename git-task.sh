@@ -33,38 +33,95 @@ current_branch () {
     git symbolic-ref HEAD --short 2>/dev/null
 }
 
+get_worktree_path () {
+    git worktree list --porcelain | (
+        unset path branch worktree is_correct_branch  
+        while read line ; do
+            case "$line" in
+              branch*)
+                  # line to array
+                  line_=($line)
+                  # get the branch path
+                  branch_=${line_[1]}
+                  # branch path to array
+                  branch_=(${branch_//\// })
+                  # get branch name
+                  branch=${branch_[-1]}
+                  if [ "${branch}" == $1 ]; then
+                      is_correct_branch=true
+                  fi
+                  ;;
+              worktree*)
+                  # line to array
+                  line_=($line)
+                  # get the branch path
+                  worktree=${line_[1]}
+                  ;;
+              *)
+              ;;
+            esac
+            if [ "${is_correct_branch}" = true ]; then
+                break
+            fi
+        done
+        if [ "${is_correct_branch}" = true ]; then
+            path="$worktree"
+        fi
+        [ -n "$path" ] && echo " $path" || echo
+    )
+}
+
+
+has_worktree () {
+  worktree=$(get_worktree_path $1)
+  if [ -z "${worktree}" ]; then
+      # no worktree
+      echo 0
+  else
+      # there is one
+      echo 1
+  fi
+}
+
+
+
 # stash the current branch and remember its name
 prepare () {
   $_DEBUG && log "Preparing transaction..."
-  $_DEBUG && log "Checking for .git directory..."
-  # TODO: currently only works in the git root directory.
   _OLDDIR="$PWD"
-  cd $( git rev-parse --show-toplevel )
-  if [[ ! -d .git ]]; then
-    error "Git dir not found. Is this the root directory of the repository?"
-    exit 1
+  if [ $_BRANCH_HAS_WORKTREE -eq 0 ]; then
+    $_DEBUG && log "Checking for .git directory..."
+    # TODO: currently only works in the git root directory.
+    cd $( git rev-parse --show-toplevel )
+    if [[ ! -d .git ]]; then
+      error "Git dir not found. Is this the root directory of the repository?"
+      exit 1
+    fi
+
+    # source env file if exists
+    [ -f ${_TASKBRANCH}.config ] && source ./${_TASKBRANCH}.config
+    # if this fails, something is horribly wrong.
+    $_DEBUG && log "Stashing current branch..."
+    git stash save --include-untracked \
+      "git-task stash. You should never see this." &>/dev/null
+    if [[ $? -ne 0 ]]; then
+      error "[FATAL] Stashing failed, bailing out. Your working directory might be dirty."
+    fi
+
+    $_DEBUG && log "Checking out task-branch..."
+    git checkout  -q ${_TASKBRANCH} &>/dev/null
+    if [[ $? -ne 0 ]]; then
+      $_DEBUG && log "No task branch. Creating new orphan branch..."
+      git checkout -q --orphan "${_TASKBRANCH}" HEAD || rollback 1
+      $_DEBUG && log "Unstaging everything..."
+      git rm -q --cached -r "*" || rollback 1
+    fi
+    cd $_OLDDIR
+  else
+    $_DEBUG && log "Moving to worktree."
+    cd $(get_worktree_path $_TASKBRANCH)
   fi
 
-  # source env file if exists
-  [ -f ${_TASKBRANCH}.config ] && source ./${_TASKBRANCH}.config
-  # if this fails, something is horribly wrong.
-  $_DEBUG && log "Stashing current branch..."
-  git stash save --include-untracked \
-    "git-task stash. You should never see this." &>/dev/null
-  if [[ $? -ne 0 ]]; then
-    error "[FATAL] Stashing failed, bailing out. Your working directory might be dirty."
-  fi
-
-  $_DEBUG && log "Checking out task-branch..."
-	git checkout  -q ${_TASKBRANCH} &>/dev/null
-  if [[ $? -ne 0 ]]; then
-    $_DEBUG && log "No task branch. Creating new orphan branch..."
-    git checkout -q --orphan "${_TASKBRANCH}" HEAD || rollback 1
-    $_DEBUG && log "Unstaging everything..."
-    git rm -q --cached -r "*" || rollback 1
-  fi
-
-  cd $_OLDDIR
   $_DEBUG && log "Done preparing."
 }
 
@@ -101,16 +158,20 @@ task_commit () {
 
 rollback () {
   $_DEBUG && log "Rolling back..."
-  # Since we stashed, there should™ be nothing that could go wrong here.
-  $_DEBUG && log "Checking out working branch..."
-  git checkout -f ${_CURRENT} &>/dev/null
-  if [[ $? -ne 0 ]]; then
-    error "[FATAL] Couldn't rollback to previous state: checkout to ${_CURRENT} failed. There should be a stash with your uncommited changes."
+  if [ $_BRANCH_HAS_WORKTREE -eq 0 ]; then
+    cd $_OLDDIR
+  else
+    # Since we stashed, there should™ be nothing that could go wrong here.
+    $_DEBUG && log "Checking out working branch..."
+    git checkout -f ${_CURRENT} &>/dev/null
+    if [[ $? -ne 0 ]]; then
+      error "[FATAL] Couldn't rollback to previous state: checkout to ${_CURRENT} failed. There should be a stash with your uncommited changes."
+    fi
+    $_DEBUG && log "Applying the stash..."
+    git stash pop -q
   fi
-  $_DEBUG && log "Applying the stash..."
-  git stash pop -q
-  $_DEBUG && log "Done rolling back."
 
+  $_DEBUG && log "Done rolling back."
   exit $1
 }
 
@@ -118,6 +179,7 @@ rollback () {
 
 # TODO: Figure out a better way to save this than a global.
 _CURRENT=$(current_branch)
+_BRANCH_HAS_WORKTREE=$(has_worktree $_TASKBRANCH)
 
 case $1 in
   editconfig)
