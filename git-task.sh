@@ -159,9 +159,6 @@ task_commit () {
 rollback () {
   $_DEBUG && log "Rolling back..."
   if [ $_BRANCH_HAS_WORKTREE -eq 0 ]; then
-    cd $_OLDDIR
-  else
-    # Since we stashed, there should™ be nothing that could go wrong here.
     $_DEBUG && log "Checking out working branch..."
     git checkout -f ${_CURRENT} &>/dev/null
     if [[ $? -ne 0 ]]; then
@@ -169,6 +166,9 @@ rollback () {
     fi
     $_DEBUG && log "Applying the stash..."
     git stash pop -q
+  else
+    cd $_OLDDIR
+    # Since we stashed, there should™ be nothing that could go wrong here.
   fi
 
   $_DEBUG && log "Done rolling back."
